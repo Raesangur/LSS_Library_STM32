@@ -1,12 +1,6 @@
-# LSS_Libraries_Arduino
-Official Lynxmotion Smart Servo (LSS) libraries for Arduino
+# LSS_Libraries_STM32
+Unofficial Lynxmotion Smart Servo (LSS) libraries for STM32. rewritten from the official [Arduino library](https://github.com/Lynxmotion/LSS_Library_Arduino)
 
-Read more about the LSS on our [wiki](https://www.robotshop.com/info/wiki/lynxmotion/view/lynxmotion-smart-servo/).
+Read more about the LSS and the [LSS protocol](https://www.robotshop.com/info/wiki/lynxmotion/view/lynxmotion-smart-servo/lss-communication-protocol/) on their [wiki](https://www.robotshop.com/info/wiki/lynxmotion/view/lynxmotion-smart-servo/).
 
-If you want more details about the LSS protocol, go [here](https://www.robotshop.com/info/wiki/lynxmotion/view/lynxmotion-smart-servo/lss-communication-protocol/).
-
-To configure your LSS easily, we recommend you try out the [LSS Config](https://www.robotshop.com/en/lynxmotion-smart-servo-lss-configuration-software.html). More details about it [on the wiki](https://www.robotshop.com/info/wiki/lynxmotion/view/lynxmotion-smart-servo/lss-configuration-software/).
-
-Purchase any LSS model on [RobotShop.com](https://www.robotshop.com/en/lynxmotion-smart-servos.html) and get [accessories](https://www.robotshop.com/en/lynxmotion-servos-accessories-1.html), too!
-
-Check out blogs, tutorials and post questions on the Robotshop [community site](https://www.robotshop.com/community/).
+Check the official page for more info. This fork doesn't come with any liability or warranty and is not associated with Lynxmotion.
