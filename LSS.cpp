@@ -43,7 +43,7 @@
 #define LSS_SupportsSettingTimeouts
 
 //> Bus communication
-#define  LSS_DEFAULT_BAUD               (115200)
+#define LSS_DEFAULT_BAUD               (115200)
 #define LSS_TIMEOUT                     100     // in ms
 #define LSS_COMMAND_START               ("#")
 #define LSS_COMMAND_REPLY_START         ("*")
@@ -603,41 +603,50 @@ static bool set_session_config (LSS* lss, LSS_SetType setType, int16_t value,
 
 static int16_t timed_read(LSS* lss)
 {
-    -----
-    int c;
-    unsigned long startMillis = millis();
-    do
-    {
-        c =  bus->read();
-        if (c >= 0)
-            return (c);
-    } while (millis() - startMillis < _msg_char_timeout);
-    return (-1);     // -1 indicates timeout
+	int16_t val = 0;
+
+	HAL_STATUS status = HAL_UART_Receive(lss->huart, &val, 2, lss->msg_char_timeout);
+	if (status == HAL_OK)
+	{
+		return val;
+	}
+	else if (status == HAL_TIMEOUT || status == HAL_BUSY)
+	{
+		lss->lastCommStatus = LSS_CommStatus_ReadTimeout;
+		return -1;
+	}
+	else
+	{
+		lss->lastCommStatus = LSS_CommStatus_ReadNoBus;
+		return -1;
+	}
 }
 
 
 static void set_read_timeouts(LSS* lss, uint32_t startResponseTimeout, uint32_t msgCharTimeout)
 {
     lss->msgCharTimeout = msgCharTimeout;
-
-    -----
-    bus->setTimeout(start_response_timeout);
-
 }
 
 static void init_bus(LSS* lss, UART_HandleTypeDef* huart, uint32_t baud)
 {
-    -----
-    bus = &s;
-    bus->setTimeout(LSS_TIMEOUT);
-    hardwareSerial = true;
-    s.begin(baud);
+	lss->huart           = huart;
+	huart->Init.baudrate = baud;
+	lss->msgCharTimeout  = LSS_TIMEOUT;
+
+	if (HAL_UART_INIT(huart) != HAL_OK)
+	{
+		error_handler();
+	}
 }
 
 // Close the bus (stream), free pins and null reference
 static void close_bus(LSS* lss)
 {
-    -----
+	if (HAL_UART_DeInit(lss->huart) != HAL_OK)
+	{
+		error_handler();
+	}
 }
 
 
@@ -648,50 +657,51 @@ static void close_bus(LSS* lss)
  * Max size for cmd = (LSS_MAX_TOTAL_COMMAND_LENGTH - 1) */
 static bool generic_write(LSS* lss, const char* cmd)
 {
-    -----
-    // Exit condition
-    if (bus == (Stream*) nullptr)
-    {
-        lastCommStatus = LSS_CommStatus_WriteNoBus;
-        return (false);
-    }
+	char command[LSS_MAX_TOTAL_COMMAND_LENGTH] = {'\0'};
 
-    // Build command
-    bus->write('#');
-    // Servo ID
-    bus->print(id, DEC);
-    // Command
-    bus->write(cmd);
-    // Command end
-    bus->write('\r');
-    // Success
-    lastCommStatus = LSS_CommStatus_WriteSuccess;
-    return (true);
+	uint16_t len = snprintf(command, LSS_MAX_TOTAL_COMMAND_LENGTH,
+							"%s%d%s%s",
+							LSS_COMMAND_START,
+							lss->servoID,
+							cmd,
+							LSS_COMMAND_END);
+
+	if (HAL_UART_TRANSMIT(lss->huart, command, len, lss->msgCharTimeout) == HAL_OK)
+	{
+		lss->lastCommStatus = LSS_CommStatus_WriteSuccess;
+		return true;
+	}
+	else
+	{
+		lss->lastCommStatus = LSS_CommStatus_WriteNoBus;
+		return false;
+	}
 }
 
 /* Build & write a LSS command to the bus using the provided ID and value
  * Max size for cmd = (LSS_MAX_TOTAL_COMMAND_LENGTH - 1) */
 static bool generic_write_val(LSS* lss, const char* cmd, int16_t value)
 {
-    // Exit condition
-    if (bus == (Stream*) nullptr)
-    {
-        lastCommStatus = LSS_CommStatus_WriteNoBus;
-        return (false);
-    }
+	char command[LSS_MAX_TOTAL_COMMAND_LENGTH] = {'\0'};
 
-    bus->write('#');
-    // Servo ID
-    bus->print(id, DEC);
-    // Command
-    bus->write(cmd);
-    // Value
-    bus->print(value, DEC);
-    // Command end
-    bus->write('\r');
-    // Success
-    lastCommStatus = LSS_CommStatus_WriteSuccess;
-    return (true);
+	uint16_t len = snprintf(command, LSS_MAX_TOTAL_COMMAND_LENGTH,
+							"%s%d%s%d%s",
+							LSS_COMMAND_START,
+							lss->servoID,
+							cmd,
+							value,
+							LSS_COMMAND_END);
+
+	if (HAL_UART_TRANSMIT(lss->huart, command, len, lss->msgCharTimeout) == HAL_OK)
+	{
+		lss->lastCommStatus = LSS_CommStatus_WriteSuccess;
+		return true;
+	}
+	else
+	{
+		lss->lastCommStatus = LSS_CommStatus_WriteNoBus;
+		return false;
+	}
 }
 
 // Build & write a LSS command to the bus using the provided ID and value
@@ -699,29 +709,28 @@ static bool generic_write_val(LSS* lss, const char* cmd, int16_t value)
 static bool generic_write_val_param(LSS* lss, const char* cmd, int16_t value,
                                     const char* parameter, int16_t parameter_value)
 {
-    -----
-    // Exit condition
-    if (bus == (Stream*) nullptr)
-    {
-        lastCommStatus = LSS_CommStatus_WriteNoBus;
-        return (false);
-    }
+	char command[LSS_MAX_TOTAL_COMMAND_LENGTH] = {'\0'};
 
-    bus->write('#');
-    // Servo ID
-    bus->print(id, DEC);
-    // Command
-    bus->print(cmd);
-    // Value
-    bus->print(value, DEC);
-    bus->write(parameter);
-    // Parameter Value
-    bus->print(parameter_value, DEC);
-    // Command end
-    bus->write('\r');
-    // Success
-    lastCommStatus = LSS_CommStatus_WriteSuccess;
-    return (true);
+	uint16_t len = snprintf(command, LSS_MAX_TOTAL_COMMAND_LENGTH,
+							"%s%d%s%d%s%d%s",
+							LSS_COMMAND_START,
+							lss->servoID,
+							cmd,
+							value,
+							parameter,
+							parameter_value,
+							LSS_COMMAND_END);
+
+	if (HAL_UART_TRANSMIT(lss->huart, command, len, lss->msgCharTimeout) == HAL_OK)
+	{
+		lss->lastCommStatus = LSS_CommStatus_WriteSuccess;
+		return true;
+	}
+	else
+	{
+		lss->lastCommStatus = LSS_CommStatus_WriteNoBus;
+		return false;
+	}
 }
 
 
