@@ -15,16 +15,17 @@
 
 /*************************************************************************************************/
 /* File includes ------------------------------------------------------------------------------- */
-#include <string.h>
+#include <stdbool.h>
 #include <stdio.h>
 #include <stdint.h>
+#include <string.h>
 
 #include "usart.h"
 
 
 /*************************************************************************************************/
 /* Enumss -------------------------------------------------------------------------------------- */
-enum LSS_LastCommStatus
+typedef enum
 {
     LSS_CommStatus_Idle,
     LSS_CommStatus_ReadSuccess,
@@ -37,9 +38,9 @@ enum LSS_LastCommStatus
     LSS_CommStatus_WriteSuccess,
     LSS_CommStatus_WriteNoBus,
     LSS_CommStatus_WriteUnknown
-};
+} LSS_LastCommStatus;
 
-enum LSS_Status
+typedef enum
 {
     LSS_StatusUnknown,
     LSS_StatusLimp,
@@ -53,57 +54,58 @@ enum LSS_Status
     LSS_StatusBlocked,   // same as stuck but reached maximum duty and still can't move
     LSS_StatusSafeMode,
     LSS_StatusLast
-};
-enum LSS_Model
+} LSS_Status;
+
+typedef enum
 {
     LSS_ModelHighTorque,
     LSS_ModelStandard,
     LSS_ModelHighSpeed,
     LSS_ModelUnknown
-};
+}LSS_Model;
 
 //> Parameter for query
-enum LSS_QueryType
+typedef enum
 {
     LSS_QuerySession            = 0,
     LSS_QueryConfig             = 1,
     LSS_QueryInstantaneousSpeed = 2,
     LSS_QueryTargetTravelSpeed  = 3
-};
+}LSS_QueryType;
 
 //> Parameter for query distance sensor
-enum LSS_QueryTypeDistance
+typedef enum
 {
     LSS_Query_Sharp_GP2Y0A41SK0F = 1,
     LSS_Query_Sharp_GP2Y0A21YK0F = 2,
     LSS_Query_Sharp_GP2Y0A02YK0F = 3
-};
+}LSS_QueryTypeDistance;
 
 //> Parameter for setter
-enum LSS_SetType
+typedef enum
 {
     LSS_SetSession = 0,
     LSS_SetConfig  = 1
-};
+}LSS_SetType;
 
 //> Parameter for Serial/RC mode change
-enum LSS_ConfigMode
+typedef enum
 {
     LSS_ModeSerial     = 0,
     LSS_ModePositionRC = 1,
     LSS_ModeWheelRC    = 2
-};
+}LSS_ConfigMode;
 
 //> Parameter for gyre direction
-enum LSS_ConfigGyre
+typedef enum
 {
     LSS_GyreInvalid          = 0,
     LSS_GyreClockwise        = 1,
     LSS_GyreCounterClockwise = -1
-};
+}LSS_ConfigGyre;
 
 //> LED colors
-enum LSS_LED_Color
+typedef enum
 {
     LSS_LED_Black   = 0,
     LSS_LED_Red     = 1,
@@ -113,7 +115,7 @@ enum LSS_LED_Color
     LSS_LED_Cyan    = 5,
     LSS_LED_Magenta = 6,
     LSS_LED_White   = 7
-};
+}LSS_LED_Color;
 
 
 /*************************************************************************************************/
@@ -136,7 +138,6 @@ typedef struct {
     
     bool                hardwareSerial;
     LSS_LastCommStatus  lastCommStatus;
-    uint16_t            readID;
     uint32_t            msgCharTimeout; // timeout waiting for characters inside of packet
     UART_HandleTypeDef* huart;
     
@@ -268,7 +269,7 @@ inline static uint8_t convert_hex(char c)
 
 inline static bool str_to_int(char* inputstr, int32_t* intnum)
 {
-    const size_t MAX_LENGTH = 11;
+    const int8_t MAX_LENGTH = 11;
 
     if (inputstr == NULL || inputstr[0] == '\0')
     {

@@ -47,7 +47,7 @@
 #define LSS_TIMEOUT                     100     // in ms
 #define LSS_COMMAND_START               ("#")
 #define LSS_COMMAND_REPLY_START         ("*")
-#define LSS_COMMAND_END                 ("\r")
+#define LSS_COMMAND_END                 ('\r')
 #define LSS_FIRST_POSITION_DISABLED     ("DIS")
 #define LSS_MAX_TOTAL_COMMAND_LENGTH    (30 + 1)   // ex: #999XXXX-2147483648\r; Adding 1 for end string char (\0)
                                                 // ex: #999XX000000000000000000\r;
@@ -171,7 +171,7 @@ static char*    generic_read_str       (LSS* lss, const char* cmd);
 
 /* ----------- */
 /* Constructor */
-void LSS(LSS* lss, uint8_t id, UART_HandleTypeDef* huart, uint32_t baud)
+void LSS_init(LSS* lss, uint8_t id, UART_HandleTypeDef* huart, uint32_t baud)
 {
     assert_param(id > LSS_ID_MIN && id < LSS_ID_MAX);
     
@@ -603,12 +603,16 @@ static bool set_session_config (LSS* lss, LSS_SetType setType, int16_t value,
 
 static int16_t timed_read(LSS* lss)
 {
-	int16_t val = 0;
+	uint8_t val[2] = {0};
 
-	HAL_STATUS status = HAL_UART_Receive(lss->huart, &val, 2, lss->msg_char_timeout);
+	HAL_StatusTypeDef status = HAL_UART_Receive(lss->huart, val, 2, lss->msgCharTimeout);
 	if (status == HAL_OK)
 	{
-		return val;
+	    // endianness might be wrong
+	    int16_t returnVal = val[0];
+	    returnVal       <<= 8;
+	    returnVal        |= val[1];
+		return returnVal;
 	}
 	else if (status == HAL_TIMEOUT || status == HAL_BUSY)
 	{
@@ -631,10 +635,10 @@ static void set_read_timeouts(LSS* lss, uint32_t startResponseTimeout, uint32_t 
 static void init_bus(LSS* lss, UART_HandleTypeDef* huart, uint32_t baud)
 {
 	lss->huart           = huart;
-	huart->Init.baudrate = baud;
+	huart->Init.BaudRate = baud;
 	lss->msgCharTimeout  = LSS_TIMEOUT;
 
-	if (HAL_UART_INIT(huart) != HAL_OK)
+	if (HAL_UART_Init(huart) != HAL_OK)
 	{
 		error_handler();
 	}
@@ -657,16 +661,16 @@ static void close_bus(LSS* lss)
  * Max size for cmd = (LSS_MAX_TOTAL_COMMAND_LENGTH - 1) */
 static bool generic_write(LSS* lss, const char* cmd)
 {
-	char command[LSS_MAX_TOTAL_COMMAND_LENGTH] = {'\0'};
+	uint8_t command[LSS_MAX_TOTAL_COMMAND_LENGTH] = {'\0'};
 
-	uint16_t len = snprintf(command, LSS_MAX_TOTAL_COMMAND_LENGTH,
-							"%s%d%s%s",
+	uint16_t len = snprintf((char*)command, LSS_MAX_TOTAL_COMMAND_LENGTH,
+							"%s%d%s%c",
 							LSS_COMMAND_START,
 							lss->servoID,
 							cmd,
 							LSS_COMMAND_END);
 
-	if (HAL_UART_TRANSMIT(lss->huart, command, len, lss->msgCharTimeout) == HAL_OK)
+	if (HAL_UART_Transmit(lss->huart, command, len, lss->msgCharTimeout) == HAL_OK)
 	{
 		lss->lastCommStatus = LSS_CommStatus_WriteSuccess;
 		return true;
@@ -682,17 +686,17 @@ static bool generic_write(LSS* lss, const char* cmd)
  * Max size for cmd = (LSS_MAX_TOTAL_COMMAND_LENGTH - 1) */
 static bool generic_write_val(LSS* lss, const char* cmd, int16_t value)
 {
-	char command[LSS_MAX_TOTAL_COMMAND_LENGTH] = {'\0'};
+    uint8_t command[LSS_MAX_TOTAL_COMMAND_LENGTH] = {'\0'};
 
-	uint16_t len = snprintf(command, LSS_MAX_TOTAL_COMMAND_LENGTH,
-							"%s%d%s%d%s",
+	uint16_t len = snprintf((char*)command, LSS_MAX_TOTAL_COMMAND_LENGTH,
+							"%s%d%s%d%c",
 							LSS_COMMAND_START,
 							lss->servoID,
 							cmd,
 							value,
 							LSS_COMMAND_END);
 
-	if (HAL_UART_TRANSMIT(lss->huart, command, len, lss->msgCharTimeout) == HAL_OK)
+	if (HAL_UART_Transmit(lss->huart, command, len, lss->msgCharTimeout) == HAL_OK)
 	{
 		lss->lastCommStatus = LSS_CommStatus_WriteSuccess;
 		return true;
@@ -709,10 +713,10 @@ static bool generic_write_val(LSS* lss, const char* cmd, int16_t value)
 static bool generic_write_val_param(LSS* lss, const char* cmd, int16_t value,
                                     const char* parameter, int16_t parameter_value)
 {
-	char command[LSS_MAX_TOTAL_COMMAND_LENGTH] = {'\0'};
+    uint8_t command[LSS_MAX_TOTAL_COMMAND_LENGTH] = {'\0'};
 
-	uint16_t len = snprintf(command, LSS_MAX_TOTAL_COMMAND_LENGTH,
-							"%s%d%s%d%s%d%s",
+	uint16_t len = snprintf((char*)command, LSS_MAX_TOTAL_COMMAND_LENGTH,
+							"%s%d%s%d%s%d%c",
 							LSS_COMMAND_START,
 							lss->servoID,
 							cmd,
@@ -721,7 +725,7 @@ static bool generic_write_val_param(LSS* lss, const char* cmd, int16_t value,
 							parameter_value,
 							LSS_COMMAND_END);
 
-	if (HAL_UART_TRANSMIT(lss->huart, command, len, lss->msgCharTimeout) == HAL_OK)
+	if (HAL_UART_Transmit(lss->huart, command, len, lss->msgCharTimeout) == HAL_OK)
 	{
 		lss->lastCommStatus = LSS_CommStatus_WriteSuccess;
 		return true;
@@ -739,118 +743,102 @@ static bool generic_write_val_param(LSS* lss, const char* cmd, int16_t value,
 
 static char* generic_read_str(LSS* lss, const char* cmd)
 {
-    -----
-    // Exit condition
-    if (bus == (Stream*) nullptr)
-    {
-        lastCommStatus = LSS_CommStatus_ReadNoBus;
-        return ((char *) nullptr);
-    }
-
-    // 
-
     // Read from bus until first character; exit if not found before timeout
-    if (!(bus->find(LSS_COMMAND_REPLY_START)))
+    uint8_t response = 0;
+    do
     {
-        lastCommStatus = LSS_CommStatus_ReadTimeout;
-        return ((char *) nullptr);
-    }
+        uint32_t timeout = HAL_GetTick() + lss->msgCharTimeout;
+        if (HAL_UART_Receive(lss->huart, &response, 1, timeout) != HAL_OK)
+        {
+            error_handler();
+            return NULL;
+        }
+
+    } while (response != LSS_COMMAND_REPLY_START[0]);
+
 
     // Ok we have the * now now lets get the servo ID from the message.
-    readID = 0;
-    int c;
-    bool valid_field = 0;
-    while ((c =  timedRead()) >= 0)
+    uint16_t readID = 0;
+    for (uint16_t i = 0; i < sizeof("255") - 1; i++)     // i < 3
     {
-        if ((c < '0') || (c > '9')) break;  // not a number character
-        readID = readID * 10 + c - '0';
-        valid_field = true;
-    }
+        int16_t c = timed_read(lss);
+        if (c == -1)
+        {
+            if (readID == lss->servoID)
+            {
+                break;
+            }
+            else
+            {
+                lss->lastCommStatus = LSS_CommStatus_ReadTimeout;
+                return NULL;
+            }
+        }
+        if (c < '0' || c > '9') // not a number character
+        {
+            lss->lastCommStatus = LSS_CommStatus_ReadWrongID;
+            return NULL;
+        }
 
-    if ((!valid_field) || (readID != id))
-    {
-        lastCommStatus = LSS_CommStatus_ReadWrongID;
-        // BUGBUG Should we clear out until CR?
-        return ((char *) nullptr);
-    } 
+        readID = readID * 10 + c - '0';
+    }
 
     // Now lets validate the right CMD
-    for (;;)
+    uint8_t readCMD[LSS_MAX_TOTAL_COMMAND_LENGTH] = {0};
+    uint16_t len = strlen(cmd) + 1;
+    if (HAL_UART_Receive(lss->huart, readCMD, len, lss->msgCharTimeout * (len + 1)) != HAL_OK)
     {
-        if (c != *cmd)
+        lss->lastCommStatus = LSS_CommStatus_ReadTimeout;
+        return NULL;
+    }
+    if (strncmp(cmd, (const char*)readCMD, len) != 0)
+    {
+        lss->lastCommStatus = LSS_CommStatus_ReadWrongIdentifier;
+        return NULL;
+    }
+
+    for (int i = 0; i < LSS_MAX_TOTAL_COMMAND_LENGTH - 1; i++)
+    {
+        int16_t c = timed_read(lss);
+        if (c == -1)
         {
-            lastCommStatus = LSS_CommStatus_ReadWrongIdentifier;
-            return ((char *) nullptr);          
+            lss->lastCommStatus = LSS_CommStatus_ReadTimeout;
+            return NULL;
         }
-        cmd++;
-        if (*cmd == '\0')
-            break;
-        c =  timedRead();
-    }
-    size_t maxLength = (LSS_MAX_TOTAL_COMMAND_LENGTH - 1);
-    size_t index = 0;
-
-
-    while (index < maxLength)
-    {
-        c =  timedRead();
-        if (c < 0 || c == LSS_COMMAND_END[0])
-            break;
-        value[index] = (char) c;
-        index++;
-    }
-    value[index] = '\0';
-
-    // Return value (success)
-    if (c < 0) 
-    {
-        // did not get the ending CR
-        lastCommStatus = LSS_CommStatus_ReadTimeout;
-        return ((char *) nullptr);
+        else if (c == LSS_COMMAND_END)
+        {
+            lss->values[i]      = '\0';
+            lss->lastCommStatus = LSS_CommStatus_ReadSuccess;
+            return lss->values;
+        }
+        else
+        {
+            lss->values[i] = (char)c;
+        }
     }
 
-    lastCommStatus = LSS_CommStatus_ReadSuccess;
-    return value;
+    lss->lastCommStatus = LSS_CommStatus_ReadWrongFormat;
+    return NULL;
 }
 
 
 static uint16_t generic_read_s16(LSS* lss, const char* cmd)
 {
-    -----
     // Let the string function do all of the main parsing work.
-    char *valueStr = genericRead_Blocking_str(id, cmd);
-    if (valueStr == (char *) nullptr)
+    char *valueStr = generic_read_str(lss, cmd);
+    if (valueStr == NULL)
     {
-        // the above method will have already set the error condition. 
         return 0;
     }
 
-    // Exit condition
-    if (bus == (Stream*) nullptr)
+    int32_t value = 0;
+    if (!str_to_int(valueStr, &value))
     {
-        lastCommStatus = LSS_CommStatus_ReadNoBus;
-        return (0);
+        lss->lastCommStatus = LSS_CommStatus_ReadWrongID;
+        return 0;
     }
-
-    // convert the value string to value
-    int16_t value = 0;
-    int16_t value_sign = 1;
-    for(;;)
+    else
     {
-        if ((*valueStr >= '0') && (*valueStr <= '9'))
-            value = value * 10 + *valueStr - '0';
-        else if (*valueStr == '-')
-            value_sign = -1;
-        else 
-            break;
-        valueStr++; 
+        return value;
     }
-    // now see if we exited with valid number
-    if (*valueStr != '\0')
-    {
-        lastCommStatus = LSS_CommStatus_ReadWrongID;
-        return (0);
-    }
-    // return the computed value
-    return value * value_sign; 
 } 
